@@ -30,7 +30,7 @@ void printE();
 __global__ void SetCheckMessage(float *E,float *Mes,int *B,int width)
 {
 	unsigned int xIndex = blockIdx.x * blockDim.x + threadIdx.x;
-	//计算当前行号
+	//计算当前行号,如何确定innerIdx正确性
 
 	float den=1.0;
 	if(xIndex < width){
