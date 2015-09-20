@@ -22,8 +22,23 @@ float var;
 
 //int readFile();
 void init();
-void printE();
+void printZ();
 int write_alist();
+
+void printE(){
+	FILE* fp;
+	if((fp = fopen("E.txt","wt")) == NULL){
+		printf("can not create E.txt\n");
+		exit(0) ;
+	}
+	for(int i = 1;i <= M;i ++){
+		for(int j = 1;j <= N;j ++){
+			fprintf(fp,"%.3f ,",E[i][j]);
+		}
+		fprintf(fp,"\n");
+	}
+	fclose(fp);
+}
 
 int readLXL(){
 	FILE* fp;
@@ -205,12 +220,6 @@ int main()
 						h_mes[index] = mes[i][j];
 					}
 				}
-
-				cudaMemcpy(d_E,h_E,sizeof(float)*(M+1)*(N+1),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_mes,h_mes,sizeof(float)*(M+1)*(N+1),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_varToCheck,h_varToCheck,sizeof(float)*(M*row+1),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_r,r,sizeof(float)*(N+1),cudaMemcpyHostToDevice);
-
 				dim3 threads,grid;
 
 				int flag = 0;
@@ -219,6 +228,10 @@ int main()
 					t ++;
 					iter ++;
 					//主要的gpu逻辑.
+					cudaMemcpy(d_E,h_E,sizeof(float)*(M+1)*(N+1),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_mes,h_mes,sizeof(float)*(M+1)*(N+1),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_varToCheck,h_varToCheck,sizeof(float)*(M*row+1),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_r,r,sizeof(float)*(N+1),cudaMemcpyHostToDevice);
 					cudaMemcpy(d_mes,h_mes,sizeof(float)*(M+1)*(N+1),cudaMemcpyHostToDevice);
 					
 					threads.x = BLOCK_DIM_32;
@@ -228,9 +241,14 @@ int main()
 					SetCheckMessage<<<grid,threads>>>(d_E,d_mes,d_varToCheck,M,M);	
 					cudaThreadSynchronize();
 
+					cudaMemcpy(h_E,d_E,sizeof(float)*(M*N+1),cudaMemcpyDeviceToHost);
+					//set E
+					for(int i = 1;i <= M*N;i ++){
+						E[i/(N+1)+1][i-N*i/(N+1)] = h_E[i];
+					}
+					printE();
+					printf("he");
 
-					printf("hello");
-					
 					threads.x = BLOCK_DIM_64;
 					threads.y = 1;
 					grid.y = 1;
@@ -238,29 +256,23 @@ int main()
 					setZ<<<grid,threads>>>(d_E,d_z,d_r,d_checkToVar,M,MaxVarDegree);
 					cudaThreadSynchronize();
 					cudaMemcpy(h_mes,d_mes,sizeof(float)*(M*N+1),cudaMemcpyDeviceToHost);
-					cudaMemcpy(h_E,d_E,sizeof(float)*(M*N+1),cudaMemcpyDeviceToHost);
-					//set E
-					for(int i = 1;i <= M*N;i ++){
-						E[i/(N+1)+1][i-N*i/(N+1)] = h_E[i];
-					}
-					printE();
 					
+
 					//set z
 					cudaMemcpy(z,d_z,sizeof(float)*(N+1),cudaMemcpyDeviceToHost);
 					int codeErrNum = 0;
-					//此处还可以改为并行
+					//此处还可以改为并行?
 					for(int i = 1;i <= N;i ++){
 						if(z[i]){
 							codeErrNum ++;
 							tmpErr ++;
 						}
 					}
-					//printZ();
+					printZ();
 					if(codeErrNum == 0){
 						flag = 1;
 					}
 					if(flag == 0){
-						//gpu
 						cudaMemcpy(d_checkToVar,h_checkToVar,sizeof(float)*N*col,cudaMemcpyHostToDevice);
 						cudaMemcpy(d_E,h_E,sizeof(float)*N*M,cudaMemcpyHostToDevice);
 						cudaMemcpy(d_mes,h_mes,sizeof(float)*M*N,cudaMemcpyHostToDevice);
@@ -275,8 +287,6 @@ int main()
 				}
 			}
 			printf("snr = %f,error frame:%f\n",snr,(50/frame));
-			/*fos << snr << "\t" << ((float)50/frame) << endl;
-			fos << snr << "\t" << ((float)tmpErr/50/N) << endl;*/
 			fprintf(fp,"snr = %f,error frame = %f\n",snr,(50.0/frame));
 		}
 		clock_t end = clock();
@@ -294,20 +304,20 @@ int main()
     return 0;
 }
 
-void printE(){
+
+void printZ(){
 	FILE* fp;
-	if((fp = fopen("E.txt","wt")) == NULL){
-		printf("can not create E.txt\n");
-		return ;
+	if((fp = fopen("Z.txt","wt")) == NULL){
+		printf("cannot create Z.txt");
+		exit(0);
 	}
-	for(int i = 1;i <= M;i ++){
-		for(int j = 1;j <= N;j ++){
-			fprintf(fp,"%f ,",E[i][j]);
-		}
-		fprintf(fp,"\n");
+	for(int i = 1;i <= N;i ++){
+		fprintf(fp,"%f,",z[i]);
 	}
 	fclose(fp);
 }
+
+
 
 //读文件以及赋初值
 //int readFile(){
