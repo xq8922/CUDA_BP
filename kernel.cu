@@ -125,11 +125,11 @@ __global__ void setBitMes(float *E,int *A,float* Mes,float* r,int col,int M,int 
 		for(int i = 1;i <= col;i ++){
 			for(int j = 1;j <= col;j ++){
 				int a_idx = xIndex*N+j;
-				int e_idx = a_idx*M+xIndex;
+				int e_idx = A[a_idx]*M+xIndex;
 				m += E[e_idx];
 			}
 			int a_idx = xIndex*N+i;
-			int e_mes_idx = a_idx*M+xIndex;
+			int e_mes_idx = A[a_idx]*M+xIndex;
 			m -= E[e_mes_idx];
 			Mes[e_mes_idx] = m + r[i];
 		}		
