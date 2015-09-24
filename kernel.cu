@@ -11,8 +11,8 @@
 #define BLOCK_DIM_64 64
 #define BLOCK_DIM_X 6;//校验节点的度
 #define BLOCK_DIM_Y 3;//变量节点的度
-__constant__  int MaxCheckdegree = 3;//检验节点的度
-__constant__ int MaxVarDegree = 5;//变量节点的度
+__constant__  int MaxCheckdegree = 5;//检验节点的度
+__constant__ int MaxVarDegree = 3;//变量节点的度
 using namespace std;
 
 int **A,**B,*z;
@@ -33,9 +33,54 @@ void printE(){
 	}
 	for(int i = 1;i <= M;i ++){
 		for(int j = 1;j <= N;j ++){
-			fprintf(fp,"%.3f ,",E[i][j]);
+			if(E[i][j] != 0){
+				fprintf(fp,"%.3f ,",E[i][j]);
+			}
 		}
 		fprintf(fp,"\n");
+	}
+	fclose(fp);
+}
+
+void printx(float** x,int m,int n){
+	FILE* fp;
+	if((fp = fopen("x.txt","wt")) == NULL){
+		printf("error");
+		exit(0);
+	}
+	for(int i = 1;i <= m;i ++){
+		for(int j = 1;j <= n;j ++){
+			fprintf(fp,"%f,",x[i][j]);
+		}
+		fprintf(fp,"\n");
+	}
+	fclose(fp);
+}
+
+void print_1dimension_float(float* x,int m){
+	FILE* fp;
+	if((fp = fopen("x.txt","wt")) == NULL){
+		exit(0);
+	}
+	for(int i =1;i <= m;i ++){
+		fprintf(fp,"%f,",x[i]);
+		if(i % N == 0){
+			fprintf(fp,"\n");
+		}
+	}
+	fclose(fp);
+}
+
+void print_1dimension_int(int* x,int m){
+	FILE* fp;
+	if((fp = fopen("x.txt","wt")) == NULL){
+		exit(0);
+	}
+	for(int i =1;i <= m;i ++){
+		fprintf(fp,"%d,",x[i]);
+		if(i % N == 0){
+			fprintf(fp,"\n");
+		}
 	}
 	fclose(fp);
 }
@@ -82,7 +127,7 @@ int readLXL(){
 }
 
 //设置校验信息
-__global__ void SetCheckMessage(float *E,float *Mes,int *B,int M,int width)
+__global__ void SetCheckMessage(float *E,float *Mes,int *B,int N,int width)
 {
 	unsigned int xIndex = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -92,45 +137,48 @@ __global__ void SetCheckMessage(float *E,float *Mes,int *B,int M,int width)
 			for(int i = 1;i <= MaxCheckdegree;i ++){
 				if(i != j){
 					int b_idx = xIndex*MaxCheckdegree+i;
-					int mes_idx = xIndex*M+B[b_idx];
+					int mes_idx = xIndex*N+B[b_idx];
 					den *= tanh(Mes[mes_idx]/2);
 				}
 			}
 			int b_idx = xIndex*MaxCheckdegree+j;
-			int e_idx = xIndex*M+B[b_idx];
+			int e_idx = xIndex*N+B[b_idx];
 			E[e_idx] = log( ( 1 + den ) / ( 1 - den ) );
 		}
 	}
 }
 
 //为z赋值，z为得到的译码结果.重新分配空间
-__global__ void setZ(float *E,float *z,float *r,int* B,int M,int width){
+__global__ void setZ(float *E,int *z,float *r,int M,int N,int width){
 	unsigned int xIndex = blockIdx.x * blockDim.x + threadIdx.x;
+	float t = 0;
 	if(xIndex < width){
-		float t = 0.0;
-		for(int i = 1;i <= M;i ++){
-			int e_idx = i*M+xIndex;
-			t += E[e_idx];
+		for(int i = 0;i < M;i ++){
+			int e_idx = i*N+xIndex+1;
+			t = t+E[e_idx];
 		}
-		z[xIndex] = (t + r[xIndex] <= 0)?1:0;
+		z[xIndex+1] = (t + r[xIndex+1] <= 0)?1:0;
+
+		//z[xIndex+1] = t;
 	}
 }
 
 //计算mes
-__global__ void setBitMes(float *E,int *A,float* Mes,float* r,int col,int M,int N,int width){
+__global__ void setBitMes(float *E,int *A,float* Mes,float* r,int col,int N,int width){
 	unsigned int xIndex = blockIdx.x * blockDim.x + threadIdx.x;
 	float m = 0.0;
 	if(xIndex < width){
 		//计算列号		
 		for(int i = 1;i <= col;i ++){
 			for(int j = 1;j <= col;j ++){
-				int a_idx = xIndex*N+j;
-				int e_idx = A[a_idx]*M+xIndex;
-				m += E[e_idx];
+				if(i != j){
+					int a_idx = xIndex*col+j;
+					int e_idx = A[a_idx]*N+xIndex+1;
+					m += E[e_idx];
+				}
 			}
-			int a_idx = xIndex*N+i;
-			int e_mes_idx = A[a_idx]*M+xIndex;
-			m -= E[e_mes_idx];
+			int a_idx = xIndex*col+i;
+			int e_mes_idx = A[a_idx]*N+xIndex+1;//是否需要加1？
 			Mes[e_mes_idx] = m + r[i];
 		}		
 	}
@@ -163,23 +211,25 @@ int main()
 		cudaMalloc((void**)&d_checkToVar,sizeof(int)*(M*col+1));
 
 		float* h_mes;
-		h_mes = (float*)malloc(sizeof(float)*(M+1)*(N+1));
+		h_mes = (float*)malloc(sizeof(float)*((M+1)*(N+1)));
 		float* d_mes;
-		cudaMalloc((void**)&d_mes,sizeof(float)*(M+1)*(N+1));
+		cudaMalloc((void**)&d_mes,sizeof(float)*((M+1)*(N+1)));
 
 		float* h_E;
-		h_E = (float*)malloc(sizeof(float)*(M+1)*(N+1));
+		h_E = (float*)malloc(sizeof(float)*((M+1)*(N+1)));
 		float* d_E;
-		cudaMalloc((void**)&d_E,sizeof(float)*(M+1)*(N+1));
+		cudaMalloc((void**)&d_E,sizeof(float)*((M+1)*(N+1)));
+		float* h_E_tmp;
+		h_E_tmp = (float*)malloc(sizeof(float)*((M+1)*(N+1)));
 
-		float* d_z;
-		cudaMalloc((void**)&d_z,sizeof(float)*(N+1));
+		int* d_z;
+		cudaMalloc((void**)&d_z,sizeof(int)*(N+1));
 
 		float* d_r;
 		cudaMalloc((void**)&d_r,sizeof(float)*(N+1));
 
 		for(float snr = 2.0;snr <= 5;snr += 0.1){
-			cout << snr << endl;
+			printf("snr = %f\n",snr);
 			float var_temp = 0.0;
 			var_temp = pow(10,snr/10);
 			var = sqrt(1.0/((2.0*(N-M)/N)*var_temp));
@@ -212,7 +262,6 @@ int main()
 						h_E[index] = E[i][j];
 					}
 				}
-
 				//set Mes
 				for(int i = 1;i <= M;i ++){
 					for(int j = 1;j <= N;j ++){
@@ -220,66 +269,83 @@ int main()
 						h_mes[index] = mes[i][j];
 					}
 				}
-				dim3 threads,grid;
+				
+				cudaMemset(d_E,0.0,sizeof(float)*(M+1)*(N+1));
+				cudaMemset(d_mes,0.0,sizeof(float)*(M+1)*(N+1));
+				cudaMemset(d_varToCheck,0.0,sizeof(float)*(M*row+1));
+				cudaMemset(d_r,0,sizeof(float)*(N+1));
+				cudaMemset(d_checkToVar,0.0,sizeof(float)*(N*col+1));
 
+				cudaMemcpy(d_E,h_E,sizeof(float)*((M+1)*(N+1)),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_mes,h_mes,sizeof(float)*((M+1)*(N+1)),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_varToCheck,h_varToCheck,sizeof(float)*(M*row+1),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_r,r,sizeof(float)*(N+1),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_checkToVar,h_checkToVar,sizeof(float)*N*col,cudaMemcpyHostToDevice);
+
+				dim3 threads,grid;
 				int flag = 0;
 				int iter = 0;				
 				while((!flag) && (iter < 1000)){
 					t ++;
 					iter ++;
 					//主要的gpu逻辑.
-					cudaMemcpy(d_E,h_E,sizeof(float)*(M+1)*(N+1),cudaMemcpyHostToDevice);
-					cudaMemcpy(d_mes,h_mes,sizeof(float)*(M+1)*(N+1),cudaMemcpyHostToDevice);
-					cudaMemcpy(d_varToCheck,h_varToCheck,sizeof(float)*(M*row+1),cudaMemcpyHostToDevice);
-					cudaMemcpy(d_r,r,sizeof(float)*(N+1),cudaMemcpyHostToDevice);
-					cudaMemcpy(d_mes,h_mes,sizeof(float)*(M+1)*(N+1),cudaMemcpyHostToDevice);
-					
 					threads.x = BLOCK_DIM_32;
 					threads.y = 1;
 					grid.x = (M+BLOCK_DIM_32-1)/BLOCK_DIM_32;
 					grid.y = 1;
-					SetCheckMessage<<<grid,threads>>>(d_E,d_mes,d_varToCheck,M,M);	
-					cudaThreadSynchronize();
 
-					cudaMemcpy(h_E,d_E,sizeof(float)*(M*N+1),cudaMemcpyDeviceToHost);
-					//set E
-					for(int i = 1;i <= M*N;i ++){
-						E[i/(N+1)+1][i-N*i/(N+1)] = h_E[i];
-					}
-					printE();
-					printf("he");
+					SetCheckMessage<<<grid,threads>>>(d_E,d_mes,d_varToCheck,N,M);	
+					cudaThreadSynchronize();
+					
+					//test
+					/*memset(h_E_tmp,0,sizeof(float)*((M+1)*(N+1)));
+					cudaMemcpy(h_E_tmp,d_E,sizeof(float)*((M+1)*(N+1)),cudaMemcpyDeviceToHost);
+					print_1dimension_float(h_E_tmp,M*N);*/
+
+					printf("\nfenge\n");
 
 					threads.x = BLOCK_DIM_64;
 					threads.y = 1;
 					grid.y = 1;
 					grid.x = (N+BLOCK_DIM_64-1)/BLOCK_DIM_64;
-					setZ<<<grid,threads>>>(d_E,d_z,d_r,d_checkToVar,M,MaxVarDegree);
-					cudaThreadSynchronize();
-					cudaMemcpy(h_mes,d_mes,sizeof(float)*(M*N+1),cudaMemcpyDeviceToHost);
-					
 
-					//set z
-					cudaMemcpy(z,d_z,sizeof(float)*(N+1),cudaMemcpyDeviceToHost);
+
+					//temp 
+					/*float* d_z_temp;
+					cudamalloc((void**)&d_z_temp,sizeof(float)*(n+1));
+					cudamemset(d_z_temp,0.0,sizeof(float)*(n+1));*/
+					setZ<<<grid,threads>>>(d_E,d_z,d_r,M,N,N);
+					//setZ<<<grid,threads>>>(d_E,d_z_temp,d_r,M,N,N);
+					cudaThreadSynchronize();
+					
+					//test
+					int* z_temp;
+					z_temp = (int*)malloc(sizeof(int)*(N+1));
+					memset(z_temp,0,sizeof(int)*(N+1));
+					cudaMemcpy(z_temp,d_z,sizeof(int)*(N+1),cudaMemcpyDeviceToHost);
+					print_1dimension_int(z_temp,N);
+
+
+					//cudaMemcpy(r,d_r,sizeof(float)*(N+1),cudaMemcpyDeviceToHost);
+					//print_1dimension_float(r,N);
+
+
 					int codeErrNum = 0;
 					//此处还可以改为并行?
 					for(int i = 1;i <= N;i ++){
-						if(z[i]){
+						if(z_temp[i]){
 							codeErrNum ++;
 							tmpErr ++;
 						}
 					}
-					printZ();
+					//printZ();
 					if(codeErrNum == 0){
 						flag = 1;
 					}
 					if(flag == 0){
-						cudaMemcpy(d_checkToVar,h_checkToVar,sizeof(float)*N*col,cudaMemcpyHostToDevice);
-						cudaMemcpy(d_E,h_E,sizeof(float)*N*M,cudaMemcpyHostToDevice);
-						cudaMemcpy(d_mes,h_mes,sizeof(float)*M*N,cudaMemcpyHostToDevice);
-						cudaMemcpy(d_r,r,sizeof(float)*N,cudaMemcpyHostToDevice);
-						setBitMes<<<grid,threads>>>(d_E,d_checkToVar,d_mes,d_r,col,M,N,N);
+						setBitMes<<<grid,threads>>>(d_E,d_checkToVar,d_mes,d_r,col,N,N);
 						cudaThreadSynchronize();
-						cudaMemcpy(h_mes,d_mes,sizeof(float)*(M+1)*(N+1),cudaMemcpyDeviceToHost);
+						//cudaMemcpy(h_mes,d_mes,sizeof(float)*((M+1)*(N+1)),cudaMemcpyDeviceToHost);
 					}
 				}
 				if(iter == 1000){
