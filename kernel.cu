@@ -201,17 +201,17 @@ int main()
 {	
 	srand((unsigned)time(NULL));
 	clock_t begin = clock();
+	FILE* fp;
+	if((fp = fopen("result.txt","wt")) == NULL){
+		printf("create result.txt failed");
+		return 0;
+	}
 	if(readLXL()){
 		/*ofstream fos("result.txt",ios::out);
 		if(!fos){
 			cout << "create file failed" << endl;
 			return 0;
-		}*/
-		FILE* fp;
-		if((fp = fopen("result.txt","wt")) == NULL){
-			printf("create result.txt failed");
-			return 0;
-		}
+		}*/		
 		int* h_varToCheck;
 		h_varToCheck = (int*)malloc(sizeof(int)*((M+1)*(row+1)));
 		int* d_varToCheck;
@@ -413,16 +413,16 @@ int main()
 		}
 		clock_t end = clock();
 		float cost = (float)(end - begin)/CLOCKS_PER_SEC;
+		fprintf(fp,"cost = %d\n",cost);
 		cudaFree(d_varToCheck);
 		cudaFree(d_checkToVar);
 		cudaFree(d_mes);
 		cudaFree(d_E);
 		cudaFree(d_z);
 		cudaFree(d_r);
-		delete A,B,z,mes,E,r,L;
-		fclose(fp);
+		delete A,B,z,mes,E,r,L;		
 	}	
-
+	fclose(fp);
     return 0;
 }
 
