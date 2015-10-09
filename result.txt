@@ -1,0 +1,27 @@
+snr = 2.000000,totalframes = 424,fer = 0.117925
+snr = 2.100000,totalframes = 516,fer = 0.096899
+snr = 2.200000,totalframes = 567,fer = 0.088183
+snr = 2.300000,totalframes = 793,fer = 0.063052
+snr = 2.400000,totalframes = 716,fer = 0.069832
+snr = 2.500000,totalframes = 1561,fer = 0.032031
+snr = 2.599999,totalframes = 1627,fer = 0.030731
+snr = 2.699999,totalframes = 2056,fer = 0.024319
+snr = 2.799999,totalframes = 2329,fer = 0.021468
+snr = 2.899999,totalframes = 5213,fer = 0.009591
+snr = 2.999999,totalframes = 6148,fer = 0.008133
+snr = 3.099999,totalframes = 9888,fer = 0.005057
+snr = 3.199999,totalframes = 11581,fer = 0.004317
+snr = 3.299999,totalframes = 15733,fer = 0.003178
+snr = 3.399999,totalframes = 24351,fer = 0.002053
+snr = 3.499999,totalframes = 33738,fer = 0.001482
+snr = 3.599998,totalframes = 57651,fer = 0.000867
+snr = 3.699998,totalframes = 66536,fer = 0.000751
+snr = 3.799998,totalframes = 142104,fer = 0.000352
+snr = 3.899998,totalframes = 207652,fer = 0.000241
+snr = 3.999998,totalframes = 318117,fer = 0.000157
+snr = 4.099998,totalframes = 633949,fer = 0.000079
+snr = 4.199998,totalframes = 1358024,fer = 0.000037
+snr = 4.299998,totalframes = 1683297,fer = 0.000030
+snr = 4.399998,totalframes = 4316597,fer = 0.000012
+snr = 4.499998,totalframes = 5932457,fer = 0.000008
+cost = 1610612736

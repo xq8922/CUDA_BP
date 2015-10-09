@@ -1,5 +1,4 @@
 #include <stdio.h>
-//#include <fstream>
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
@@ -9,10 +8,10 @@
 #define FILE_NAME "155_64_3_5.txt"
 #define BLOCK_DIM_32 32
 #define BLOCK_DIM_64 64
-#define BLOCK_DIM_X 6;//校验节点的度
-#define BLOCK_DIM_Y 3;//变量节点的度
-__constant__  int MaxCheckdegree = 5;//检验节点的度
-__constant__ int MaxVarDegree = 3;//变量节点的度
+//#define BLOCK_DIM_X 6;//校验节点的度
+//#define BLOCK_DIM_Y 3;//变量节点的度
+//__constant__  int MaxCheckdegree = 5;//检验节点的度
+//__constant__ int MaxVarDegree = 3;//变量节点的度
 using namespace std;
 
 int **A,**B,*z;
@@ -20,111 +19,16 @@ float **mes,**E,*r,*L;
 int N,M,col,row;
 float var;
 
-//int readFile();
 void init();
-void printZ();
-int write_alist();
+//输出二位矩阵
+void printx(float**x,int m,int n);
+//输出一维浮点型数组
+void print_1dimension_float(float* x,int m);
+//输出一维整形数组
+void print_1dimension_int(int* x,int m);
+//读取H矩阵
+int readH();
 
-void printE(){
-	FILE* fp;
-	if((fp = fopen("E.txt","wt")) == NULL){
-		printf("can not create E.txt\n");
-		exit(0) ;
-	}
-	for(int i = 1;i <= M;i ++){
-		for(int j = 1;j <= N;j ++){
-			if(E[i][j] != 0){
-				fprintf(fp,"%.3f ,",E[i][j]);
-			}
-		}
-		fprintf(fp,"\n");
-	}
-	fclose(fp);
-}
-
-void printx(float** x,int m,int n){
-	FILE* fp;
-	if((fp = fopen("x.txt","wt")) == NULL){
-		printf("error");
-		exit(0);
-	}
-	for(int i = 1;i <= m;i ++){
-		for(int j = 1;j <= n;j ++){
-			fprintf(fp,"%f,",x[i][j]);
-		}
-		fprintf(fp,"\n");
-	}
-	fclose(fp);
-}
-
-void print_1dimension_float(float* x,int m){
-	FILE* fp;
-	if((fp = fopen("x.txt","wt")) == NULL){
-		exit(0);
-	}
-	for(int i =1;i <= m;i ++){
-		fprintf(fp,"%f,",x[i]);
-		if(i % N == 0){
-			fprintf(fp,"\n");
-		}
-	}
-	fclose(fp);
-}
-
-void print_1dimension_int(int* x,int m){
-	FILE* fp;
-	if((fp = fopen("x.txt","wt")) == NULL){
-		exit(0);
-	}
-	for(int i =1;i <= m;i ++){
-		fprintf(fp,"%d,",x[i]);
-		if(i % N == 0){
-			fprintf(fp,"\n");
-		}
-	}
-	fclose(fp);
-}
-
-int readLXL(){
-	FILE* fp;
-	fp = fopen(FILE_NAME,"rt");
-	if (fp == NULL)
-	{
-		printf("can't open this file");
-		return 0;
-	}
-	fscanf(fp,"%d %d\n",&N,&M);
-	fscanf(fp,"%d %d\n",&col,&row);
-	
-	A = (int **)malloc((N+1) * sizeof(int *));
-	for (int i = 1;i <= N;i++)
-	{
-		A[i] = (int *)malloc((col+1) * sizeof(int));
-		for (int j = 1;j <= col;j++)
-			fscanf(fp,"%d ",&A[i][j]);
-	}
-
-	B = (int **)malloc((M+1) * sizeof(int *));
-	for (int i = 1;i <= M;i++)
-	{
-		B[i] = (int *)malloc((row+1) * sizeof(int));
-		for (int j = 1;j <= row;j++)
-			fscanf(fp,"%d ",&B[i][j]);  //*(B+i)+j
-	}
-	mes = new float*[M+1];
-	for(int i = 0;i <= M;i ++){
-		mes[i] = new float[N+1];
-	}
-	E = new float*[M+1];
-	for(int i = 0;i <= M;i ++){
-		E[i] = new float[N+1];
-	}
-	r = new float[N+1];
-	L = new float[N+1];
-	z = new int[N+1];
-	memset(z,0,sizeof(int)*(N+1));
-	return 1;
-}
 
 //设置校验信息
 __global__ void SetCheckMessage(float *E,float *Mes,int *B,int degree,int N,int width)
@@ -201,17 +105,8 @@ int main()
 {	
 	srand((unsigned)time(NULL));
 	clock_t begin = clock();
-	FILE* fp;
-	if((fp = fopen("result.txt","wt")) == NULL){
-		printf("create result.txt failed");
-		return 0;
-	}
-	if(readLXL()){
-		/*ofstream fos("result.txt",ios::out);
-		if(!fos){
-			cout << "create file failed" << endl;
-			return 0;
-		}*/		
+	
+	if(readH()){	
 		int* h_varToCheck;
 		h_varToCheck = (int*)malloc(sizeof(int)*((M+1)*(row+1)));
 		int* d_varToCheck;
@@ -254,11 +149,12 @@ int main()
 				h_checkToVar[index] = A[i][j];
 			}
 		}
-		
+			
 		//test h_checktovar
 		//print_1dimension_int(h_checkToVar,N*col);
+		dim3 threads,grid;
 
-		for(float snr = 2.0;snr <= 5;snr += 0.1){
+		for(float snr = 2.0;snr <= 4.5;snr += 0.1){
 			printf("snr = %f\n",snr);
 			var = sqrt(1.0/((2.0*(N-M)/N)*pow(10,snr/10)));
 
@@ -292,7 +188,7 @@ int main()
 				cudaMemcpy(d_r,r,sizeof(float)*(N+1),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_checkToVar,h_checkToVar,sizeof(float)*((N+1)*(col+1)),cudaMemcpyHostToDevice);
 
-				dim3 threads,grid;
+				
 				int flag = 0;
 				int iter = 0;
 				while((!flag) && (iter < 1000)){
@@ -341,8 +237,7 @@ int main()
 					cudaThreadSynchronize();
 					/*cudaMemcpy(h_z_temp,d_z_temp,sizeof(int)*(N+1),cudaMemcpyDeviceToHost);
 					print_1dimension_float(h_z_temp,N);*/ 
-
-					
+									
 
 					//test 
 					/*cudaMemcpy(z,d_z,sizeof(int)*(N+1),cudaMemcpyDeviceToHost);
@@ -364,7 +259,6 @@ int main()
 							tmpErr ++;
 						}
 					}
-					//printZ();
 					if(codeErrNum == 0){
 						flag = 1;
 					}					
@@ -407,13 +301,28 @@ int main()
 					error++;
 				}
 			}
-			float fer = 50.0/frame;
-			printf("snr = %f,totalframes = %d,fer:%f\n",snr,frame,fer);
-			fprintf(fp,"snr = %f,totalframes = %d,fer = %f\n",snr,frame,fer);
+			double fer = 50.0/frame;	
+			printf("snr = %f,totalframes = %d,fer:%lf\n",snr,frame,fer);
+
+			FILE* fp;
+			if((fp = fopen("result.txt","a+")) == NULL){
+				printf("create result.txt failed");
+				return 0;
+			}					
+			fprintf(fp,"snr = %f,totalframes = %d,fer = %lf\n",snr,frame,fer);
+			fclose(fp);
 		}
 		clock_t end = clock();
 		float cost = (float)(end - begin)/CLOCKS_PER_SEC;
+
+		FILE* fp;
+		if((fp = fopen("result.txt","a+")) == NULL){
+			printf("create result.txt failed");
+			return 0;
+		}			
 		fprintf(fp,"cost = %d\n",cost);
+		fclose(fp);
+
 		cudaFree(d_varToCheck);
 		cudaFree(d_checkToVar);
 		cudaFree(d_mes);
@@ -422,69 +331,93 @@ int main()
 		cudaFree(d_r);
 		delete A,B,z,mes,E,r,L;		
 	}	
-	fclose(fp);
+	
     return 0;
 }
 
-
-void printZ(){
+void printx(float** x,int m,int n){
 	FILE* fp;
-	if((fp = fopen("Z.txt","wt")) == NULL){
-		printf("cannot create Z.txt");
+	if((fp = fopen("x.txt","wt")) == NULL){
+		printf("error");
 		exit(0);
 	}
-	for(int i = 1;i <= N;i ++){
-		fprintf(fp,"%f,",z[i]);
+	for(int i = 1;i <= m;i ++){
+		for(int j = 1;j <= n;j ++){
+			fprintf(fp,"%f,",x[i][j]);
+		}
+		fprintf(fp,"\n");
 	}
 	fclose(fp);
 }
 
+void print_1dimension_float(float* x,int m){
+	FILE* fp;
+	if((fp = fopen("x.txt","wt")) == NULL){
+		exit(0);
+	}
+	for(int i =1;i <= m;i ++){
+		fprintf(fp,"%f,",x[i]);
+		if(i % N == 0){
+			fprintf(fp,"\n");
+		}
+	}
+	fclose(fp);
+}
 
+void print_1dimension_int(int* x,int m){
+	FILE* fp;
+	if((fp = fopen("x.txt","wt")) == NULL){
+		exit(0);
+	}
+	for(int i =1;i <= m;i ++){
+		fprintf(fp,"%d,",x[i]);
+		if(i % N == 0){
+			fprintf(fp,"\n");
+		}
+	}
+	fclose(fp);
+}
 
-//读文件以及赋初值
-//int readFile(){
-//	ifstream fip(FILE_NAME);
-//	if(!fip){
-//		cout << "Can not find txt file!" << endl;
-//		return 0;
-//	}
-//	//此处忘记标准格式了，应该还有两行直接删掉了
-//	fip >> N;
-//	fip >> M;
-//	fip >> col;
-//	fip >> row;
-//	A = new int*[N+1];
-//	for(int i = 0;i <= N;i ++){
-//		A[i] = new int[col+1];
-//	}
-//	B = new int*[M+1];
-//	for(int i = 0;i <= M;i ++){
-//		B[i] = new int[row+1];
-//	}
-//	mes = new float*[M+1];
-//	for(int i = 0;i <= M;i ++){
-//		mes[i] = new float[N+1];
-//	}
-//	E = new float*[M+1];
-//	for(int i = 0;i <= M;i ++){
-//		E[i] = new float[N+1];
-//	}
-//	r = new float[N+1];
-//	L = new float[N+1];
-//	z = new int[N+1];
-//	for(int i = 1;i < N+1;i ++){
-//		for(int j = 1;j < col +1;j ++){
-//			fip >> A[i][j];
-//		}
-//	}
-//	for(int i = 1;i < M +1;i ++){
-//		for(int j = 1;j < row +1;j ++){
-//			fip >> B[i][j];
-//		}
-//	}
-//	memset(z,0,sizeof(int)*(N+1));
-//	return 1;
-//}
+int readH(){
+	FILE* fp;
+	fp = fopen(FILE_NAME,"rt");
+	if (fp == NULL)
+	{
+		printf("can't open this file");
+		return 0;
+	}
+	fscanf(fp,"%d %d\n",&N,&M);
+	fscanf(fp,"%d %d\n",&col,&row);
+	
+	A = (int **)malloc((N+1) * sizeof(int *));
+	for (int i = 1;i <= N;i++)
+	{
+		A[i] = (int *)malloc((col+1) * sizeof(int));
+		for (int j = 1;j <= col;j++)
+			fscanf(fp,"%d ",&A[i][j]);
+	}
+
+	B = (int **)malloc((M+1) * sizeof(int *));
+	for (int i = 1;i <= M;i++)
+	{
+		B[i] = (int *)malloc((row+1) * sizeof(int));
+		for (int j = 1;j <= row;j++)
+			fscanf(fp,"%d ",&B[i][j]);  //*(B+i)+j
+	}
+	mes = new float*[M+1];
+	for(int i = 0;i <= M;i ++){
+		mes[i] = new float[N+1];
+	}
+	E = new float*[M+1];
+	for(int i = 0;i <= M;i ++){
+		E[i] = new float[N+1];
+	}
+	r = new float[N+1];
+	L = new float[N+1];
+	z = new int[N+1];
+	memset(z,0,sizeof(int)*(N+1));
+	return 1;
+}
 
 //初始化各变量
 void init(){
@@ -509,106 +442,3 @@ void init(){
 		}
 	}
 }
-
-
-#define NUM_1 12
-#define NUM_2 20
-#define NUM_3 200
-#define NUM_4 330
-#define derect "first.txt"
-int biggest_num_n,biggest_num_m;
-int write_alist ()
-{
-	/* this assumes that A and B have the form of a rectangular
-	matrix in the file; if lists have unequal lengths, then the
-	entries should be present (eg zero values) but are ignored
-	*/
-	FILE *fp;
-	fp = fopen(derect,"r");
-	if(!fp)
-	{
-		printf("open file failed!");
-		return 0;
-	}
-	char tmp[NUM_4];
-	memset(tmp,0,sizeof(tmp));
-	fgets(tmp,NUM_1,fp);
-	int i=0,t = 10;
-	M = N = 0;
-	while(tmp[i] != ' ')
-	{
-		N = N * t + (tmp[i] - '0');
-		++i;
-	}
-	++i;
-	while((tmp[i] != ' ')&&(tmp[i] != '\n'))
-	{
-		M = M * t + (tmp[i] - '0');
-		++i;
-	}
-	memset(tmp,0,sizeof(tmp));
-	fgets(tmp,NUM_1,fp);
-	i = 0;
-	biggest_num_n = biggest_num_m = 0;
-	while(tmp[i] != ' ')
-	{
-		biggest_num_n = biggest_num_n * t + (tmp[i] - '0');
-		++i;
-	}
-	++i;
-	while(tmp[i] != ' ')
-	{
-		biggest_num_m = biggest_num_m * t + (tmp[i] - '0');
-		++i;
-	}
-	memset(tmp,0,sizeof(tmp));
-	fgets(tmp,NUM_4,fp);
-	fgets(tmp,NUM_4,fp);
-	memset(tmp,0,sizeof(tmp));
-	int j = 0,k,_tmp;
-	int tmp_N = N,tmp_M = M;
-	//matrix->B = (int **)malloc(sizeof(int) * )
-	while(tmp_N--)//存储论文中的B数组
-	{
-		i = 0;
-		k = 0;
-		fgets(tmp,NUM_3,fp);
-		while(tmp[i] != '\n')
-		{
-			_tmp = 0;
-			while(tmp[i] != ' ')
-			{
-				_tmp = _tmp * t + (tmp[i] - '0');
-				++i;
-			}
-			A[j][k] = _tmp-1;
-			E[j][_tmp-1] = 1;
-			++k;
-			++i;
-		}
-		++j;
-	}
-	j=0;
-	while(tmp_M--)//存储论文中的A数组
-	{
-		i = 0;
-		k = 0;
-		fgets(tmp,NUM_2,fp);
-		while(tmp[i] != '\n' && tmp[i] != '\0')
-		{
-			_tmp = 0;
-			while(tmp[i] != ' ')
-			{
-				_tmp = _tmp * t + (tmp[i] - '0');
-				++i;
-			}
-			B[j][k++] = _tmp-1;
-			E[_tmp-1][j] = 1;
-			++i;
-		}
-		++j;
-	}
-	fclose(fp);
-	return 1;
-}
-
