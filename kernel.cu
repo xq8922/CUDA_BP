@@ -5,13 +5,11 @@
 #include "random.h"
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h" 
-#define FILE_NAME "155_64_3_5.txt"
+//#define FILE_NAME "155_64_3_5.txt"
+#define FILE_NAME "Mackay_1057_244_1.txt"
+//#define FILE_NAME "Margulis_2640_1320.txt"
 #define BLOCK_DIM_32 32
 #define BLOCK_DIM_64 64
-//#define BLOCK_DIM_X 6;//校验节点的度
-//#define BLOCK_DIM_Y 3;//变量节点的度
-//__constant__  int MaxCheckdegree = 5;//检验节点的度
-//__constant__ int MaxVarDegree = 3;//变量节点的度
 using namespace std;
 
 int **A,**B,*z;
@@ -20,15 +18,90 @@ int N,M,col,row;
 float var;
 
 void init();
-//输出二位矩阵
-void printx(float**x,int m,int n);
-//输出一维浮点型数组
-void print_1dimension_float(float* x,int m);
-//输出一维整形数组
-void print_1dimension_int(int* x,int m);
-//读取H矩阵
-int readH();
 
+void printx(float** x,int m,int n){
+	FILE* fp;
+	if((fp = fopen("x.txt","wt")) == NULL){
+		printf("error");
+		exit(0);
+	}
+	for(int i = 1;i <= m;i ++){
+		for(int j = 1;j <= n;j ++){
+			fprintf(fp,"%f,",x[i][j]);
+		}
+		fprintf(fp,"\n");
+	}
+	fclose(fp);
+}
+
+void print_1dimension_float(float* x,int m){
+	FILE* fp;
+	if((fp = fopen("x.txt","wt")) == NULL){
+		exit(0);
+	}
+	for(int i =1;i <= m;i ++){
+		fprintf(fp,"%f,",x[i]);
+		if(i % N == 0){
+			fprintf(fp,"\n");
+		}
+	}
+	fclose(fp);
+}
+
+void print_1dimension_int(int* x,int m){
+	FILE* fp;
+	if((fp = fopen("x.txt","wt")) == NULL){
+		exit(0);
+	}
+	for(int i =1;i <= m;i ++){
+		fprintf(fp,"%d,",x[i]);
+		if(i % N == 0){
+			fprintf(fp,"\n");
+		}
+	}
+	fclose(fp);
+}
+
+int readLXL(){
+	FILE* fp;
+	fp = fopen(FILE_NAME,"rt");
+	if (fp == NULL)
+	{
+		printf("can't open this file");
+		return 0;
+	}
+	fscanf(fp,"%d %d\n",&N,&M);
+	fscanf(fp,"%d %d\n",&col,&row);
+	
+	A = (int **)malloc((N+1) * sizeof(int *));
+	for (int i = 1;i <= N;i++)
+	{
+		A[i] = (int *)malloc((col+1) * sizeof(int));
+		for (int j = 1;j <= col;j++)
+			fscanf(fp,"%d ",&A[i][j]);
+	}
+
+	B = (int **)malloc((M+1) * sizeof(int *));
+	for (int i = 1;i <= M;i++)
+	{
+		B[i] = (int *)malloc((row+1) * sizeof(int));
+		for (int j = 1;j <= row;j++)
+			fscanf(fp,"%d ",&B[i][j]);  //*(B+i)+j
+	}
+	mes = new float*[M+1];
+	for(int i = 0;i <= M;i ++){
+		mes[i] = new float[N+1];
+	}
+	E = new float*[M+1];
+	for(int i = 0;i <= M;i ++){
+		E[i] = new float[N+1];
+	}
+	r = new float[N+1];
+	L = new float[N+1];
+	z = new int[N+1];
+	memset(z,0,sizeof(int)*(N+1));
+	return 1;
+}
 
 //设置校验信息
 __global__ void SetCheckMessage(float *E,float *Mes,int *B,int degree,int N,int width)
@@ -66,19 +139,6 @@ __global__ void setZ(float *E,int *z,float *r,int M,int N,int width){
 	}
 }
 
-__global__ void setZ_float(float *E,float *z,float *r,int M,int N,int width){
-	unsigned int xIndex = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if(xIndex < width){
-		float t = 0.0;
-		for(int i = 0;i < M;i ++){
-			int e_idx = i*N+xIndex+1;
-			t += E[e_idx];
-		}
-		z[xIndex+1] = t;
-	}
-}
-
 //计算mes
 __global__ void setBitMes(int *A,float* mes,float* r,float *E,int degree,int N,int width){
 	unsigned int xIndex = blockIdx.x * blockDim.x + threadIdx.x;
@@ -105,8 +165,12 @@ int main()
 {	
 	srand((unsigned)time(NULL));
 	clock_t begin = clock();
-	
-	if(readH()){	
+	FILE* fp;
+	if((fp = fopen("result.txt","wt")) == NULL){
+		printf("create result.txt failed");
+		return 0;
+	}
+	if(readLXL()){
 		int* h_varToCheck;
 		h_varToCheck = (int*)malloc(sizeof(int)*((M+1)*(row+1)));
 		int* d_varToCheck;
@@ -149,12 +213,11 @@ int main()
 				h_checkToVar[index] = A[i][j];
 			}
 		}
-			
+		
 		//test h_checktovar
 		//print_1dimension_int(h_checkToVar,N*col);
-		dim3 threads,grid;
 
-		for(float snr = 2.0;snr <= 4.5;snr += 0.1){
+		for(float snr = 1.0;snr <= 4.0;snr += 0.3){
 			printf("snr = %f\n",snr);
 			var = sqrt(1.0/((2.0*(N-M)/N)*pow(10,snr/10)));
 
@@ -188,7 +251,7 @@ int main()
 				cudaMemcpy(d_r,r,sizeof(float)*(N+1),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_checkToVar,h_checkToVar,sizeof(float)*((N+1)*(col+1)),cudaMemcpyHostToDevice);
 
-				
+				dim3 threads,grid;
 				int flag = 0;
 				int iter = 0;
 				while((!flag) && (iter < 1000)){
@@ -237,7 +300,8 @@ int main()
 					cudaThreadSynchronize();
 					/*cudaMemcpy(h_z_temp,d_z_temp,sizeof(int)*(N+1),cudaMemcpyDeviceToHost);
 					print_1dimension_float(h_z_temp,N);*/ 
-									
+
+					
 
 					//test 
 					/*cudaMemcpy(z,d_z,sizeof(int)*(N+1),cudaMemcpyDeviceToHost);
@@ -259,6 +323,7 @@ int main()
 							tmpErr ++;
 						}
 					}
+					//printZ();
 					if(codeErrNum == 0){
 						flag = 1;
 					}					
@@ -301,28 +366,13 @@ int main()
 					error++;
 				}
 			}
-			double fer = 50.0/frame;	
-			printf("snr = %f,totalframes = %d,fer:%lf\n",snr,frame,fer);
-
-			FILE* fp;
-			if((fp = fopen("result.txt","a+")) == NULL){
-				printf("create result.txt failed");
-				return 0;
-			}					
-			fprintf(fp,"snr = %f,totalframes = %d,fer = %lf\n",snr,frame,fer);
-			fclose(fp);
+			float fer = 50.0/frame;
+			printf("snr = %f,totalframes = %d,fer:%f\n",snr,frame,fer);
+			fprintf(fp,"snr = %.1f,totalframes = %d,fer = %f\n",snr,frame,fer);
 		}
 		clock_t end = clock();
 		float cost = (float)(end - begin)/CLOCKS_PER_SEC;
-
-		FILE* fp;
-		if((fp = fopen("result.txt","a+")) == NULL){
-			printf("create result.txt failed");
-			return 0;
-		}			
 		fprintf(fp,"cost = %d\n",cost);
-		fclose(fp);
-
 		cudaFree(d_varToCheck);
 		cudaFree(d_checkToVar);
 		cudaFree(d_mes);
@@ -331,92 +381,8 @@ int main()
 		cudaFree(d_r);
 		delete A,B,z,mes,E,r,L;		
 	}	
-	
+	fclose(fp);
     return 0;
-}
-
-void printx(float** x,int m,int n){
-	FILE* fp;
-	if((fp = fopen("x.txt","wt")) == NULL){
-		printf("error");
-		exit(0);
-	}
-	for(int i = 1;i <= m;i ++){
-		for(int j = 1;j <= n;j ++){
-			fprintf(fp,"%f,",x[i][j]);
-		}
-		fprintf(fp,"\n");
-	}
-	fclose(fp);
-}
-
-void print_1dimension_float(float* x,int m){
-	FILE* fp;
-	if((fp = fopen("x.txt","wt")) == NULL){
-		exit(0);
-	}
-	for(int i =1;i <= m;i ++){
-		fprintf(fp,"%f,",x[i]);
-		if(i % N == 0){
-			fprintf(fp,"\n");
-		}
-	}
-	fclose(fp);
-}
-
-void print_1dimension_int(int* x,int m){
-	FILE* fp;
-	if((fp = fopen("x.txt","wt")) == NULL){
-		exit(0);
-	}
-	for(int i =1;i <= m;i ++){
-		fprintf(fp,"%d,",x[i]);
-		if(i % N == 0){
-			fprintf(fp,"\n");
-		}
-	}
-	fclose(fp);
-}
-
-int readH(){
-	FILE* fp;
-	fp = fopen(FILE_NAME,"rt");
-	if (fp == NULL)
-	{
-		printf("can't open this file");
-		return 0;
-	}
-	fscanf(fp,"%d %d\n",&N,&M);
-	fscanf(fp,"%d %d\n",&col,&row);
-	
-	A = (int **)malloc((N+1) * sizeof(int *));
-	for (int i = 1;i <= N;i++)
-	{
-		A[i] = (int *)malloc((col+1) * sizeof(int));
-		for (int j = 1;j <= col;j++)
-			fscanf(fp,"%d ",&A[i][j]);
-	}
-
-	B = (int **)malloc((M+1) * sizeof(int *));
-	for (int i = 1;i <= M;i++)
-	{
-		B[i] = (int *)malloc((row+1) * sizeof(int));
-		for (int j = 1;j <= row;j++)
-			fscanf(fp,"%d ",&B[i][j]);  //*(B+i)+j
-	}
-	mes = new float*[M+1];
-	for(int i = 0;i <= M;i ++){
-		mes[i] = new float[N+1];
-	}
-	E = new float*[M+1];
-	for(int i = 0;i <= M;i ++){
-		E[i] = new float[N+1];
-	}
-	r = new float[N+1];
-	L = new float[N+1];
-	z = new int[N+1];
-	memset(z,0,sizeof(int)*(N+1));
-	return 1;
 }
 
 //初始化各变量
